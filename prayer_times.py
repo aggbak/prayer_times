@@ -1,4 +1,5 @@
 import time
+import threading
 import json
 import urllib2
 import re
@@ -31,8 +32,6 @@ def conv24to12fmt(time_val):
         noon_flag = "p.m"
     return "%d:%02d %s" % (hours, minutes, noon_flag)
 
-def between_range(value, lst):
-	pass
 
 def get_time_as_string():
     str_time = time.strftime("%H:%M")
@@ -40,14 +39,44 @@ def get_time_as_string():
 
 def get_next_prayer_time(timing_dict):
     current_time = get_time_as_string()
-    current_time = "14:00"
     prayer_name = "Fajr" 
     for key in PRAYER_NAMES:
-	print str(current_time) + " > " + str(timing_dict[key]) + "is " + str(current_time > timing_dict[key])
+	#print str(current_time) + " > " + str(timing_dict[key]) + "is " + str(current_time > timing_dict[key])
 	if current_time > timing_dict[key]:
 	    prayer_name = key
     	    break
     return prayer_name 
+
+def time_until_maghrib(timing_dict):
+	current_time = get_time_as_string()
+	maghrib_time = timing_dict["Maghrib"]
+	if current_time > maghrib_time:
+		return "You can eat now"
+	else:
+		return subtract_time(maghrib_time, current_time)
+
+
+# time1 - time2
+def subtract_time(time_str1, time_str2):
+	max_time = max([time_str1, time_str2])
+	#print "MAXTIME: " + max_time
+	min_time = min([time_str1, time_str2])
+	#print "MINTIME: " + min_time
+	max_hours, max_mins = max_time.split(":")
+	min_hours, min_mins = min_time.split(":")
+
+	seconds = int(time.strftime("%S"))
+	hours_left = int(max_hours) - int(min_hours)
+	mins_left = int(max_mins) - int(min_mins)
+	if mins_left < 0:
+		hours_left -= 1
+		mins_left += 60
+	if seconds > 0:
+		mins_left -= 1
+		seconds = 60 - seconds
+	return "\n\n\n%d hrs, %d mins %d secs left" % (hours_left, mins_left, seconds)
+
+
 
 
 def comparable_time(time_val):
@@ -60,11 +89,19 @@ def comparable_time(time_val):
 	hours += 12
     return (hours)*60 + mins
 	
+def updating_method(*args):
+    gui = args[0]
+    while gui.active:
+	gui.update_time_left()
+	#print "Time Update:"
+    	time.sleep(1)
+
 
 
 class mywindow(tk.Tk):
     def __init__(self):
        self.root = tk.Tk.__init__(self)
+       self.active = True
        self.update()
        
     def update(self):
@@ -91,6 +128,8 @@ class mywindow(tk.Tk):
            self.timeleft_title = tk.Label(self.root, text="\n\n\nTime Left", font="Verdana 11")
            self.timeleft_title.grid(row=8, column=0)
 
+	   self.time_left = tk.Label(self.root, text=time_until_maghrib(self.timings), font="Arial")
+	   self.time_left.grid(row=8, column=1)
     def get_timing_labels(self):
     	return self.timing_labels
     
@@ -98,13 +137,21 @@ class mywindow(tk.Tk):
 	self.timings = getDictOfTimes()
 	self.update()
 
+    def update_time_left(self):
+    	self.time_left["text"] = time_until_maghrib(self.timings)
 	           
+    def deactivate(self):
+    	self.active = False
+	self.destroy()
+
 def main():           
 	a = mywindow()
+	clock_thread = threading.Thread(target=updating_method, args =[a])
+	a.protocol("WM_DELETE_WINDOW", a.deactivate)
+	clock_thread.start()
 	timing_labels = a.get_timing_labels()
 	timings = a.timings
-	print get_time_as_string()
-	print get_next_prayer_time(timings)
+	#print time_until_maghrib(timings)
 	a.mainloop()
 if __name__ == "__main__":
 	main()
